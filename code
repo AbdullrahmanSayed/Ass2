@@ -1,0 +1,107 @@
+import random
+import numpy as np
+import math
+
+# Function to maximize: F(x1, x2) = 8 - (x1 + 0.0317)**2 + x2**2
+def fitness_function(x1, x2):
+    return 8 - (x1 + 0.0317)**2 + x2**2
+
+# Standard decoding
+def standard_decoder(variable, variable_min, variable_max, num_bits):
+    range_ = variable_max - variable_min
+    precision = range_ / (2**num_bits - 1)
+    return variable_min + precision * int("".join(map(str, variable)), 2)
+
+# Gray decoding
+def gray_decoder(gray_code, variable_min, variable_max, num_bits):
+    binary_code = [gray_code[0]] + [gray_code[i] ^ gray_code[i-1] for i in range(1, len(gray_code))]
+    decimal_value = sum(bit * 2**i for i, bit in enumerate(binary_code[::-1]))
+    range_ = variable_max - variable_min
+    precision = range_ / (2**num_bits - 1)
+    return variable_min + precision * decimal_value
+
+# Genetic Algorithm
+def genetic_algorithm(pop_size, num_bits, num_generations, p_cross, p_mut, variable_min, variable_max, decoding_method):
+    population = [[random.randint(0, 1) for _ in range(num_bits * 2)] for _ in range(pop_size)]
+    best_fitness = []
+    average_fitness = []
+
+    for gen in range(num_generations):
+        # Decode population
+        decoded_population = []
+        for indv in population:
+            if decoding_method == 'standard':
+                x1 = standard_decoder(indv[:num_bits], variable_min, variable_max, num_bits)
+                x2 = standard_decoder(indv[num_bits:], variable_min, variable_max, num_bits)
+            elif decoding_method == 'gray':
+                x1 = gray_decoder(indv[:num_bits], variable_min, variable_max, num_bits)
+                x2 = gray_decoder(indv[num_bits:], variable_min, variable_max, num_bits)
+            decoded_population.append((x1, x2))
+
+        # Evaluate fitness
+        fitness_values = [fitness_function(x1, x2) for x1, x2 in decoded_population]
+        best_fitness.append(max(fitness_values))
+        average_fitness.append(np.mean(fitness_values))
+
+        # Selection (Roulette wheel)
+        selected_parents = []
+        total_fitness = sum(fitness_values)
+        for _ in range(pop_size):
+            pick = random.uniform(0, total_fitness)
+            current_sum = 0
+            for i, fitness in enumerate(fitness_values):
+                current_sum += fitness
+                if current_sum > pick:
+                    selected_parents.append(population[i])
+                    break
+
+        # Crossover (One-point)
+        offspring = []
+        for i in range(0, pop_size, 2):
+            if random.random() < p_cross:
+                crossover_point = random.randint(1, num_bits * 2 - 1)
+                offspring.extend([selected_parents[i][:crossover_point] + selected_parents[i+1][crossover_point:],
+                                  selected_parents[i+1][:crossover_point] + selected_parents[i][crossover_point:]])
+            else:
+                offspring.extend(selected_parents[i:i+2])
+
+        # Mutation (Bit-flip)
+        for indv in offspring:
+            for i in range(num_bits * 2):
+                if random.random() < p_mut:
+                    indv[i] = 1 - indv[i]
+
+        # Elitism
+        elite_indices = np.argsort(fitness_values)[-2:]
+        elite_offspring = [population[idx] for idx in elite_indices]
+        offspring.extend(elite_offspring)
+
+        # Replace population
+        population = offspring
+
+    return best_fitness, average_fitness
+
+# Part I: Compare standard decoding and gray decoding with different precisions
+pop_size = 100
+num_generations = 100
+p_cross = 0.6
+p_mut = 0.05
+variable_min = -2
+variable_max = 2
+precisions = [8, 10, 12]  # Number of bits to encode the variables
+decoding_methods = ['standard', 'gray']
+
+for num_bits in precisions:
+    for decoding_method in decoding_methods:
+        best_fitness, average_fitness = genetic_algorithm(pop_size, num_bits, num_generations, p_cross, p_mut, variable_min, variable_max, decoding_method)
+        print(f"Precision: {num_bits} bits, Decoding Method: {decoding_method}")
+        print("Best Fitness:", best_fitness[-1])
+        print("Average Fitness:", average_fitness[-1])
+        print()
+
+# Part II: Extend to handle the constraint x1 + x2 = 1
+def fitness_with_constraint(x1, x2):
+    return fitness_function(x1, x2) - abs(x1 + x2 - 1)
+
+# Modify genetic algorithm to use fitness_with_constraint instead of fitness_function
+
